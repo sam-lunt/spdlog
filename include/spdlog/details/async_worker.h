@@ -29,7 +29,7 @@ private:
         formatter_ptr      formatter;
         log_err_handler    err_handler;
 
-        // need an explicitly definied constructor to work with unordered_map::emplace,
+        // need an explicitly defined constructor to work with unordered_map::emplace,
         // since aggregate constructors don't work with perfect forwarding
         // (at least as the standard library does it)
         async_logger_data(queue_type& queue_, sink_vector const& sinks_, std::string name_, formatter_ptr formatter_, log_err_handler err_handler_) SPDLOG_NOEXCEPT
@@ -58,6 +58,7 @@ private:
     data_map_type           _data_map;
     std::condition_variable _data_condition_variable;
     std::thread             _worker_thread; // TODO enable calling work_loop from a user created thread
+    // TODO enable multiple threads of execution
 
 public:
     async_worker(std::function<void()> worker_warmup_cb, std::function<void()> worker_teardown_cb) SPDLOG_NOEXCEPT
@@ -136,6 +137,7 @@ public:
     {
         lock_data();
 
+        // TODO push a message with a future/promise and wait on it to avoid locking for so long (pointer to promise will keep it trivially destructible)
         auto it = _data_map.find(&logger);
         if (it != _data_map.end())
         {
