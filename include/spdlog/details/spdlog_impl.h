@@ -208,8 +208,22 @@ inline std::shared_ptr<spdlog::logger> spdlog::create_async(const std::string &l
     const async_overflow_policy overflow_policy, const std::function<void()> &worker_warmup_cb,
     const std::chrono::milliseconds &flush_interval_ms, const std::function<void()> &worker_teardown_cb)
 {
+#if defined(__GNUC__) || defined(__clang__)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
+#elif defined(_MSC_VER)
+#pragma warning( push )
+#pragma warning( disable : 4996)
+#endif
+
     return details::registry::instance().create_async(
         logger_name, queue_size, overflow_policy, worker_warmup_cb, flush_interval_ms, worker_teardown_cb, sink);
+
+#if defined(__GNUC__) || defined(__clang__)
+#pragma GCC diagnostic pop
+#elif defined(_MSC_VER)
+#pragma warning( pop )
+#endif
 }
 
 // Create and register an async logger with multiple sinks
@@ -217,8 +231,22 @@ inline std::shared_ptr<spdlog::logger> spdlog::create_async(const std::string &l
     const async_overflow_policy overflow_policy, const std::function<void()> &worker_warmup_cb,
     const std::chrono::milliseconds &flush_interval_ms, const std::function<void()> &worker_teardown_cb)
 {
+#if defined(__GNUC__) || defined(__clang__)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
+#elif defined(_MSC_VER)
+#pragma warning( push )
+#pragma warning( disable : 4996)
+#endif
+
     return details::registry::instance().create_async(
         logger_name, queue_size, overflow_policy, worker_warmup_cb, flush_interval_ms, worker_teardown_cb, sinks);
+
+#if defined(__GNUC__) || defined(__clang__)
+#pragma GCC diagnostic pop
+#elif defined(_MSC_VER)
+#pragma warning( pop )
+#endif
 }
 
 template<class It>
