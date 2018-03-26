@@ -10,10 +10,11 @@
 // If user requests a non existing logger, nullptr will be returned
 // This class is thread safe
 
-#include "../async_logger.h"
 #include "../common.h"
 #include "../details/null_mutex.h"
 #include "../logger.h"
+#include "../async_logger.h"
+#include "async_worker.h"
 
 #include <chrono>
 #include <functional>
@@ -52,10 +53,9 @@ public:
         std::lock_guard<Mutex> lock(_mutex);
         throw_if_exists(logger_name);
         std::shared_ptr<logger> new_logger;
-        if (_async_mode)
+        if (_async_worker)
         {
-            new_logger = std::make_shared<async_logger>(logger_name, sinks_begin, sinks_end, _async_q_size, _overflow_policy,
-                _worker_warmup_cb, _flush_interval_ms, _worker_teardown_cb);
+            new_logger = std::make_shared<async_logger>(logger_name, sinks_begin, sinks_end, _async_q_size, _overflow_policy, _async_worker);
         }
         else
         {
@@ -81,15 +81,18 @@ public:
     }
 
     template<class It>
+    SPDLOG_DEPRECATED
     std::shared_ptr<async_logger> create_async(const std::string &logger_name, size_t queue_size,
         const async_overflow_policy overflow_policy, const std::function<void()> &worker_warmup_cb,
         const std::chrono::milliseconds &flush_interval_ms, const std::function<void()> &worker_teardown_cb, const It &sinks_begin,
         const It &sinks_end)
     {
+        (void)flush_interval_ms;
+
         std::lock_guard<Mutex> lock(_mutex);
         throw_if_exists(logger_name);
         auto new_logger = std::make_shared<async_logger>(
-            logger_name, sinks_begin, sinks_end, queue_size, overflow_policy, worker_warmup_cb, flush_interval_ms, worker_teardown_cb);
+            logger_name, sinks_begin, sinks_end, queue_size, overflow_policy, std::make_shared<async_worker>(worker_warmup_cb, worker_teardown_cb));
 
         if (_formatter)
         {
@@ -140,6 +143,7 @@ public:
         return create(logger_name, {sink});
     }
 
+    SPDLOG_DEPRECATED
     std::shared_ptr<async_logger> create_async(const std::string &logger_name, size_t queue_size,
         const async_overflow_policy overflow_policy, const std::function<void()> &worker_warmup_cb,
         const std::chrono::milliseconds &flush_interval_ms, const std::function<void()> &worker_teardown_cb, sinks_init_list sinks)
@@ -148,6 +152,7 @@ public:
             logger_name, queue_size, overflow_policy, worker_warmup_cb, flush_interval_ms, worker_teardown_cb, sinks.begin(), sinks.end());
     }
 
+    SPDLOG_DEPRECATED
     std::shared_ptr<async_logger> create_async(const std::string &logger_name, size_t queue_size,
         const async_overflow_policy overflow_policy, const std::function<void()> &worker_warmup_cb,
         const std::chrono::milliseconds &flush_interval_ms, const std::function<void()> &worker_teardown_cb, sink_ptr sink)
@@ -204,22 +209,26 @@ public:
         _err_handler = handler;
     }
 
-    void set_async_mode(size_t q_size, const async_overflow_policy overflow_policy, const std::function<void()> &worker_warmup_cb,
-        const std::chrono::milliseconds &flush_interval_ms, const std::function<void()> &worker_teardown_cb)
+    SPDLOG_DEPRECATED
+    void set_async_mode(size_t q_size, const async_overflow_policy overflow_policy, const std::function<void()> &worker_warmup_cb, const std::chrono::milliseconds &flush_interval_ms, const std::function<void()> &worker_teardown_cb)
+    {
+        (void)flush_interval_ms;
+        set_async_mode(q_size, overflow_policy, worker_warmup_cb, worker_teardown_cb);
+    }
+
+    void set_async_mode(size_t q_size, const async_overflow_policy overflow_policy, const std::function<void()> &worker_warmup_cb, const std::function<void()> &worker_teardown_cb)
     {
         std::lock_guard<Mutex> lock(_mutex);
-        _async_mode = true;
-        _async_q_size = q_size;
+
+        _async_worker    = std::make_shared<async_worker>(worker_warmup_cb, worker_teardown_cb);
+        _async_q_size    = q_size;
         _overflow_policy = overflow_policy;
-        _worker_warmup_cb = worker_warmup_cb;
-        _flush_interval_ms = flush_interval_ms;
-        _worker_teardown_cb = worker_teardown_cb;
     }
 
     void set_sync_mode()
     {
         std::lock_guard<Mutex> lock(_mutex);
-        _async_mode = false;
+        _async_worker = nullptr;
     }
 
     static registry_t<Mutex> &instance()
@@ -239,18 +248,15 @@ private:
         }
     }
 
-    Mutex _mutex;
+    Mutex                                                    _mutex;
     std::unordered_map<std::string, std::shared_ptr<logger>> _loggers;
-    formatter_ptr _formatter;
-    level::level_enum _level = level::info;
-    level::level_enum _flush_level = level::off;
-    log_err_handler _err_handler;
-    bool _async_mode = false;
-    size_t _async_q_size = 0;
-    async_overflow_policy _overflow_policy = async_overflow_policy::block_retry;
-    std::function<void()> _worker_warmup_cb;
-    std::chrono::milliseconds _flush_interval_ms;
-    std::function<void()> _worker_teardown_cb;
+    formatter_ptr                                            _formatter       = nullptr;
+    level::level_enum                                        _level           = level::info;
+    level::level_enum                                        _flush_level     = level::off;
+    log_err_handler                                          _err_handler     = nullptr;
+    size_t                                                   _async_q_size    = 0;
+    async_overflow_policy                                    _overflow_policy = async_overflow_policy::block_retry;
+    std::shared_ptr<async_worker>                            _async_worker    = nullptr;
 };
 
 #ifdef SPDLOG_NO_REGISTRY_MUTEX
