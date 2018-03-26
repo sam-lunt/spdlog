@@ -157,6 +157,16 @@ public:
         return back == front;
     }
 
+    auto enqueue_pos() const -> std::size_t
+    {
+        return enqueue_pos_.load(std::memory_order_acquire);
+    }
+
+    auto dequeue_pos() const -> std::size_t
+    {
+        return dequeue_pos_.load(std::memory_order_acquire);
+    }
+
 private:
     struct cell_t
     {
