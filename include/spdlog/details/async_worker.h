@@ -213,7 +213,11 @@ private:
                 lock.unlock();
 
                 while (_lock_requested.load(std::memory_order_acquire))
-                    ; // TODO pause instruction
+#if defined(__GNUC__) || defined(__clang__)
+                    __builtin_ia32_pause();
+#else
+                    ; // Windows provides YieldProcessor, but that would require bringing in Windows.h
+#endif
 
                 lock.lock();
                 
