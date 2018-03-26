@@ -81,7 +81,7 @@ public:
     }
 
     template<class It>
-    SPDLOG_DEPRECATED
+    SPDLOG_DEPRECATED("explicitly creating async_logger is deprecated, use async_mode")
     std::shared_ptr<async_logger> create_async(const std::string &logger_name, size_t queue_size,
         const async_overflow_policy overflow_policy, const std::function<void()> &worker_warmup_cb,
         const std::chrono::milliseconds &flush_interval_ms, const std::function<void()> &worker_teardown_cb, const It &sinks_begin,
@@ -143,7 +143,7 @@ public:
         return create(logger_name, {sink});
     }
 
-    SPDLOG_DEPRECATED
+    SPDLOG_DEPRECATED("explicitly creating async_logger is deprecated, use async_mode")
     std::shared_ptr<async_logger> create_async(const std::string &logger_name, size_t queue_size,
         const async_overflow_policy overflow_policy, const std::function<void()> &worker_warmup_cb,
         const std::chrono::milliseconds &flush_interval_ms, const std::function<void()> &worker_teardown_cb, sinks_init_list sinks)
@@ -152,7 +152,7 @@ public:
             logger_name, queue_size, overflow_policy, worker_warmup_cb, flush_interval_ms, worker_teardown_cb, sinks.begin(), sinks.end());
     }
 
-    SPDLOG_DEPRECATED
+    SPDLOG_DEPRECATED("explicitly creating async_logger is deprecated, use async_mode")
     std::shared_ptr<async_logger> create_async(const std::string &logger_name, size_t queue_size,
         const async_overflow_policy overflow_policy, const std::function<void()> &worker_warmup_cb,
         const std::chrono::milliseconds &flush_interval_ms, const std::function<void()> &worker_teardown_cb, sink_ptr sink)
@@ -209,7 +209,7 @@ public:
         _err_handler = handler;
     }
 
-    SPDLOG_DEPRECATED
+    SPDLOG_DEPRECATED("flush interval is no longer used")
     void set_async_mode(size_t q_size, const async_overflow_policy overflow_policy, const std::function<void()> &worker_warmup_cb, const std::chrono::milliseconds &flush_interval_ms, const std::function<void()> &worker_teardown_cb)
     {
         (void)flush_interval_ms;

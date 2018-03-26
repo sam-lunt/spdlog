@@ -42,11 +42,11 @@
 #endif
 
 #if defined(__GNUC__) || defined(__clang__)
-#define SPDLOG_DEPRECATED __attribute__((deprecated))
+#define SPDLOG_DEPRECATED(message) __attribute__((deprecated(message)))
 #elif defined(_MSC_VER)
-#define SPDLOG_DEPRECATED __declspec(deprecated)
+#define SPDLOG_DEPRECATED(message) __declspec(deprecated(message))
 #else
-#define SPDLOG_DEPRECATED
+#define SPDLOG_DEPRECATED(message)
 #endif
 
 #include "fmt/fmt.h"

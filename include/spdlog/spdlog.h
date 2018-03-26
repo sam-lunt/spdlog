@@ -65,7 +65,7 @@ void set_async_mode(size_t queue_size, const async_overflow_policy overflow_poli
     const std::function<void()> &worker_warmup_cb = nullptr,
     const std::function<void()> &worker_teardown_cb = nullptr);
 
-SPDLOG_DEPRECATED
+SPDLOG_DEPRECATED("flush interval is no longer used")
 void set_async_mode(size_t queue_size, const async_overflow_policy overflow_policy,
     const std::function<void()> &worker_warmup_cb,
     const std::chrono::milliseconds &flush_interval_ms,
