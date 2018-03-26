@@ -50,6 +50,11 @@ inline void spdlog::logger::set_pattern(const std::string &pattern, pattern_time
     _set_pattern(pattern, pattern_time);
 }
 
+inline auto spdlog::logger::formatter() const -> formatter_ptr
+{
+    return _formatter;
+}
+
 template<typename... Args>
 inline void spdlog::logger::log(level::level_enum lvl, const char *fmt, const Args &... args)
 {

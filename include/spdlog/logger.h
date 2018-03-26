@@ -113,6 +113,8 @@ public:
     void set_pattern(const std::string &pattern, pattern_time_type pattern_time = pattern_time_type::local);
     void set_formatter(formatter_ptr msg_formatter);
 
+    auto formatter() const -> formatter_ptr;
+
     // automatically call flush() if message level >= log_level
     void flush_on(level::level_enum log_level);
 
