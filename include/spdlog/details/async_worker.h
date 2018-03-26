@@ -14,8 +14,6 @@
 namespace spdlog {
 namespace details {
 
-// TODO use SPDLOG_NOEXCEPT
-
 class async_worker
 {
 private:
@@ -34,7 +32,7 @@ private:
         // need an explicitly definied constructor to work with unordered_map::emplace,
         // since aggregate constructors don't work with perfect forwarding
         // (at least as the standard library does it)
-        async_logger_data(queue_type& queue_, sink_vector const& sinks_, std::string name_, formatter_ptr formatter_, log_err_handler err_handler_)
+        async_logger_data(queue_type& queue_, sink_vector const& sinks_, std::string name_, formatter_ptr formatter_, log_err_handler err_handler_) SPDLOG_NOEXCEPT
             : queue(&queue_)
             , sinks(&sinks_)
             , logger_name(std::move(name_))
@@ -62,7 +60,7 @@ private:
     std::thread             _worker_thread; // TODO enable calling work_loop from a user created thread
 
 public:
-    async_worker(std::function<void()> worker_warmup_cb, std::function<void()> worker_teardown_cb)
+    async_worker(std::function<void()> worker_warmup_cb, std::function<void()> worker_teardown_cb) SPDLOG_NOEXCEPT
         : _running{ true }
         , _lock_requested{ false }
         , _waiting_for_data{ false }
@@ -83,7 +81,7 @@ public:
         )
     {}
 
-    ~async_worker()
+    ~async_worker() SPDLOG_NOEXCEPT
     {
         _running.store(false, std::memory_order_release);
 
