@@ -139,7 +139,7 @@ protected:
     void _incr_msg_counter(details::log_msg &msg);
 
     const std::string _name;
-    std::vector<sink_ptr> _sinks;
+    const std::vector<sink_ptr> _sinks;
     formatter_ptr _formatter;
     spdlog::level_t _level;
     spdlog::level_t _flush_level;
