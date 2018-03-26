@@ -11,7 +11,6 @@ namespace details {
 
 struct async_log_msg
 {
-    // async_msg_type        msg_type;
     level::level_enum     level;
     log_clock::time_point time;
     std::size_t           thread_id;
