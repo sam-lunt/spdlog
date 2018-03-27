@@ -154,7 +154,7 @@ public:
         unlock_data();
 
         if (was_empty)
-            _data_condition_variable.notify_one(); // there should only ever be one waiter
+            _data_condition_variable.notify_all();
     }
 
     void deregister_logger(async_logger const& logger)
@@ -175,6 +175,8 @@ public:
                 if (it->second.queue->dequeue_pos() >= write_pos)
                     break;
             }
+
+            _data_map.erase(it);
         }
         
         unlock_data();
@@ -202,27 +204,13 @@ public:
         unlock_data();
     }
 
-private:
-    void lock_data()
-    {
-        // prevent setting _lock_requested from multiple threads
-        _registration_mutex.lock();
-
-        _lock_requested.store(true, std::memory_order_release);
-        _data_mutex.lock();
-        _lock_requested.store(false, std::memory_order_release);
-    }
-
-    void unlock_data()
-    {
-        // order is important, because _registration_mutex is acquired first in lock_data method
-        _data_mutex.unlock();
-        _registration_mutex.unlock();
-    }
-
+    // if thread count is 0,
+    // the user should call this explicitly
     void work_loop()
     {
         std::unique_lock<std::mutex> lock(_data_mutex);
+        _active_workers += 1;
+        lock.unlock();
 
         while (_running.load(std::memory_order_acquire))
         {
@@ -235,50 +223,87 @@ private:
             }
 
             if (_lock_requested.load(std::memory_order_acquire))
-            {
-                lock.unlock();
-
-                while (_lock_requested.load(std::memory_order_acquire))
-#if defined(__GNUC__) || defined(__clang__)
-                    __builtin_ia32_pause();
-#else
-                    ; // Windows provides YieldProcessor, but that would require bringing in Windows.h
-#endif
-
-                lock.lock();
-                
-                if (_data_map.empty())
-                    _data_condition_variable.wait(lock,
-                        [this]
-                        {
-                            return !_data_map.empty()
-                                || !_running.load(std::memory_order_acquire);
-                        }
-                    );
-            }
+                worker_yield();
             else if (count == 0)
-            {
-                _waiting_for_data.store(true, std::memory_order_release);
-
-                // predicate is checked before waiting,
-                // so if data became available since setting _waiting_for_data and notify was already called,
-                // this won't cause a deadlock
-                _data_condition_variable.wait(lock,
-                    [this]
-                    {
-                        return _data_available.load(std::memory_order_acquire)
-                            || !_running.load(std::memory_order_acquire);
-                    }
-                );
-
-                // order is important here: since the waiting flag is checked
-                // before the new data flag is set, if we clear the waiting flag
-                // before clearing the new data flag, we can be sure that no
-                // writer will set the new_data flag again before we request it
-                _waiting_for_data.store(false, std::memory_order_release);
-                _data_available.store(false, std::memory_order_relaxed); // this thread is the only reader, so relaxed memory order
-            }
+                wait_for_data();
         }
+
+        lock.lock();
+        _active_workers -= 1;
+    }
+
+private:
+    void lock_data()
+    {
+        // prevent setting _lock_requested from multiple threads
+        _registration_mutex.lock();
+
+        _lock_requested.store(true, std::memory_order_release);
+        _data_mutex.lock();
+
+        // one of the workers did not acquire the lock;
+        // get at the back of the line. Once workers
+        // are able to acquire the lock and decrement _active_workers,
+        // they wait on the condition variable,
+        // so this loop will eventually exit
+        while (_active_workers > 0)
+        {
+            _data_mutex.unlock();
+            _data_mutex.lock();
+        }
+
+        _lock_requested.store(false, std::memory_order_release);
+    }
+
+    void unlock_data()
+    {
+        // order of unlocking is important,
+        // because _registration_mutex is acquired first in lock_data method
+        _data_mutex.unlock();
+        
+        // if there were threads waiting for data,
+        // this will wake them up unnecessarily,
+        // but that should be rare (modifying data is relatively infrequent)
+        // and the cost of an extra wakeup is low
+        _data_condition_variable.notify_all(); 
+
+        _registration_mutex.unlock();
+    }
+
+    void worker_yield()
+    {
+        std::unique_lock<std::mutex> lock(_data_mutex);
+        _active_workers -= 1;
+
+        // the map could have been made empty while we were locked,
+        // so don't wakeup unless the map is not empty or we are done running
+        _data_condition_variable.wait(lock,
+            [this]
+            {
+                return !_lock_requested.load(std::memory_order_acquire)
+                    && (!_data_map.empty() || !_running.load(std::memory_order_acquire));
+            }
+        );
+
+        _active_workers += 1;
+        lock.unlock();
+    }
+
+    void wait_for_data()
+    {
+        _waiting_for_data.fetch_add(1, std::memory_order_release);
+
+        std::unique_lock<std::mutex> lock(_data_mutex);
+        _active_workers -= 1;
+
+        // no predicate, which allows spurious wakeups.
+        // Low cost to waking up early: just polls the queue and then waits again
+        _data_condition_variable.wait(lock);
+
+        _active_workers += 1;
+        lock.unlock();
+
+        _waiting_for_data.fetch_sub(1, std::memory_order_release);
     }
 
     bool process_next_message(async_logger_data& data)
