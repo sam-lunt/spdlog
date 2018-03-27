@@ -157,27 +157,22 @@ public:
             _data_condition_variable.notify_all();
     }
 
-    void deregister_logger(async_logger const& logger)
+    void deregister_logger(async_logger& logger)
     {
+        // this blocks until all data currently in the queue
+        // (at the time the function is called)
+        // has been removed.
+        // The logger destructor calls this function,
+        // so new messages shouldn't be logged while
+        // the logger is in the process of being destroyed.
+        // However, this will not deadlock if that does happen
+        logger.flush();
+
         lock_data();
 
-        // TODO push a message with a future/promise and wait on it to avoid locking for so long (pointer to promise will keep it trivially destructible)
         auto it = _data_map.find(&logger);
         if (it != _data_map.end())
-        {
-            auto write_pos = it->second.queue->enqueue_pos();
-            while (process_next_message(it->second))
-            {
-                // should never happen, since logger only calls this method in destructor,
-                // and this would imply that new messages have been added since the destructor was called,
-                // which is undefined behavior (and obviously bad).
-                // However, this ensures the deregister operation is wait-free
-                if (it->second.queue->dequeue_pos() >= write_pos)
-                    break;
-            }
-
             _data_map.erase(it);
-        }
         
         unlock_data();
     }
