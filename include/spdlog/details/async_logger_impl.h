@@ -20,7 +20,7 @@ inline spdlog::async_logger::async_logger(const std::string &logger_name, const 
                    end,
                    queue_size,
                    overflow_policy,
-                   std::make_shared<details::async_worker>(worker_warmup_cb, worker_teardown_cb)
+                   std::make_shared<details::async_worker>(1, worker_warmup_cb, worker_teardown_cb)
                 )
 {
     (void)flush_interval_ms;

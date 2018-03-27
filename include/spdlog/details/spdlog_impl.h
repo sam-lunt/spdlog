@@ -283,10 +283,10 @@ inline void spdlog::set_error_handler(log_err_handler handler)
     return details::registry::instance().set_error_handler(std::move(handler));
 }
 
-inline void spdlog::set_async_mode(size_t queue_size, const async_overflow_policy overflow_policy,
+inline void spdlog::set_async_mode(size_t queue_size, const async_overflow_policy overflow_policy, std::size_t worker_threads,
     const std::function<void()> &worker_warmup_cb, const std::function<void()> &worker_teardown_cb)
 {
-    details::registry::instance().set_async_mode(queue_size, overflow_policy, worker_warmup_cb, worker_teardown_cb);
+    details::registry::instance().set_async_mode(queue_size, overflow_policy, worker_threads, worker_warmup_cb, worker_teardown_cb);
 }
 
 inline void spdlog::set_async_mode(size_t queue_size, const async_overflow_policy overflow_policy,

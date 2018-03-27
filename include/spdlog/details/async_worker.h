@@ -49,66 +49,90 @@ private:
 
     using data_map_type = std::unordered_map<async_logger const*, async_logger_data>;
 
-    std::atomic<bool>       _running;
-    std::atomic<bool>       _lock_requested;
-    std::atomic<bool>       _waiting_for_data;
-    std::atomic<bool>       _data_available;
-    std::mutex              _registration_mutex;
-    std::mutex              _data_mutex;
-    data_map_type           _data_map;
-    std::condition_variable _data_condition_variable;
-    std::thread             _worker_thread; // TODO enable calling work_loop from a user created thread
-    // TODO enable multiple threads of execution
+    std::atomic<bool>              _running;
+    std::atomic<bool>              _lock_requested;
+
+    std::mutex                     _registration_mutex;
+    std::mutex                     _data_mutex;
+
+    std::condition_variable        _data_condition_variable; // associated with _data_mutex
+
+    data_map_type                  _data_map; // protected by _data_mutex
+
+    std::atomic<std::size_t>       _waiting_for_data;
+    std::size_t                    _active_workers; // protected by _data_mutex
+
+    std::size_t const              _thread_count;
+    std::unique_ptr<std::thread[]> _worker_threads;
 
 public:
-    async_worker(std::function<void()> worker_warmup_cb, std::function<void()> worker_teardown_cb) SPDLOG_NOEXCEPT
+    // if thread_count is 0, the user is responsible for calling work_loop.
+    // the callbacks will be copied for each thread created.
+    async_worker(std::size_t thread_count, std::function<void()> worker_warmup_cb, std::function<void()> worker_teardown_cb) SPDLOG_NOEXCEPT
         : _running{ true }
         , _lock_requested{ false }
-        , _waiting_for_data{ false }
-        , _data_available{ false }
-        , _worker_thread(
-            [this]
-            (std::function<void()> warmup_callback, std::function<void()> teardown_callback)
-            {
-                if (warmup_callback)
-                    warmup_callback();
-                this->work_loop();
+        , _waiting_for_data{ 0 }
+        , _active_workers{ 0 }
+        , _thread_count{ thread_count }
+        , _worker_threads{ nullptr }
+    {
+        if (thread_count == 0)
+            return;
 
-                if (teardown_callback)
-                    teardown_callback();
-            },
-            std::move(worker_warmup_cb),
-            std::move(worker_teardown_cb)
-        )
-    {}
+        _worker_threads.reset(new std::thread[_thread_count]);
+        for (std::size_t k = 0; k < _thread_count; ++k)
+            _worker_threads[k] = std::thread{
+                [this, worker_warmup_cb, worker_teardown_cb]
+                {
+                    if (worker_warmup_cb)
+                        worker_warmup_cb();
+
+                    this->work_loop();
+
+                    if (worker_teardown_cb)
+                        worker_teardown_cb();
+                }
+            };
+    }
 
     ~async_worker() SPDLOG_NOEXCEPT
     {
         _running.store(false, std::memory_order_release);
-
-        // there should only ever be one waiter,
-        // but in destructor it's better to be more defensive
         _data_condition_variable.notify_all();
 
-        _worker_thread.join();
+        if (_worker_threads == nullptr)
+            return;
+
+        for (std::size_t k = 0; k < _thread_count; ++k)
+            _worker_threads[k].join();
 
         // by the time this is called,
         // all loggers should be deregistered;
         // otherwise, undefined behavior is invoked
-        // (using an object that is being destroyed).
-        // However, better to minimize the damage by
-        // logging what we can (without allowing deadlock)
+        // (i.e. using an object that is being destroyed).
+        // However, if someone did mess up,
+        // it's still better to log what we can.
+        // Also, note that deregister_logger erases the elements,
+        // which would break the for-loop, so it's not used here
         for (auto& data : _data_map)
-            deregister_logger(*data.first);
+        {
+            auto write_pos = data.second.queue->enqueue_pos();
+            while (process_next_message(data.second))
+            {
+                // this check ensures that even
+                // if the queue is still be added to
+                // (which would be undefined behavior),
+                // the destructor will not deadlock
+                if (data.second.queue->dequeue_pos() >= write_pos)
+                    break;
+            }
+        }
     }
 
     void notify_new_data()
     {
-        if (_waiting_for_data.load(std::memory_order_acquire))
-        {
-            _data_available.store(std::memory_order_release);
-            _data_condition_variable.notify_one(); // there should only ever be one waiter
-        }
+        if (_waiting_for_data.load(std::memory_order_acquire) > 0)
+            _data_condition_variable.notify_one(); // only one piece of new data available, so only wake up one thread
     }
 
     void register_logger(async_logger& logger, queue_type& queue)

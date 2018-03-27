@@ -92,7 +92,7 @@ public:
         std::lock_guard<Mutex> lock(_mutex);
         throw_if_exists(logger_name);
         auto new_logger = std::make_shared<async_logger>(
-            logger_name, sinks_begin, sinks_end, queue_size, overflow_policy, std::make_shared<async_worker>(worker_warmup_cb, worker_teardown_cb));
+            logger_name, sinks_begin, sinks_end, queue_size, overflow_policy, std::make_shared<async_worker>(1, worker_warmup_cb, worker_teardown_cb));
 
         if (_formatter)
         {
@@ -213,14 +213,14 @@ public:
     void set_async_mode(size_t q_size, const async_overflow_policy overflow_policy, const std::function<void()> &worker_warmup_cb, const std::chrono::milliseconds &flush_interval_ms, const std::function<void()> &worker_teardown_cb)
     {
         (void)flush_interval_ms;
-        set_async_mode(q_size, overflow_policy, worker_warmup_cb, worker_teardown_cb);
+        set_async_mode(q_size, overflow_policy, 1, worker_warmup_cb, worker_teardown_cb);
     }
 
-    void set_async_mode(size_t q_size, const async_overflow_policy overflow_policy, const std::function<void()> &worker_warmup_cb, const std::function<void()> &worker_teardown_cb)
+    void set_async_mode(size_t q_size, const async_overflow_policy overflow_policy, std::size_t worker_threads, const std::function<void()> &worker_warmup_cb, const std::function<void()> &worker_teardown_cb)
     {
         std::lock_guard<Mutex> lock(_mutex);
 
-        _async_worker    = std::make_shared<async_worker>(worker_warmup_cb, worker_teardown_cb);
+        _async_worker    = std::make_shared<async_worker>(worker_threads, worker_warmup_cb, worker_teardown_cb);
         _async_q_size    = q_size;
         _overflow_policy = overflow_policy;
     }

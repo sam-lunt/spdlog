@@ -62,6 +62,7 @@ void set_error_handler(log_err_handler handler);
 //     callback function that will be called in worker thread upon exit
 //
 void set_async_mode(size_t queue_size, const async_overflow_policy overflow_policy = async_overflow_policy::block_retry,
+    std::size_t worker_threads = 1,
     const std::function<void()> &worker_warmup_cb = nullptr,
     const std::function<void()> &worker_teardown_cb = nullptr);
 
