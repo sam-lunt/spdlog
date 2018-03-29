@@ -24,7 +24,6 @@ struct async_log_msg
     async_log_msg& operator=(async_log_msg const&) = default;
 
     explicit async_log_msg(log_msg const& msg)
-        // : msg_type(async_msg_type::log)
         : level{ msg.level }
         , time{ msg.time }
         , thread_id{ msg.thread_id }
